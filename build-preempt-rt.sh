@@ -63,6 +63,14 @@ if [[ ! -d "$SOURCE_DIR" ]]; then
     exit 1
 fi
 
+# ─── Job count & logging setup ──────────────────────────────────────────────
+
+JOBS=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))
+
+LOGS_DIR="$(pwd)/logs"
+mkdir -p "$LOGS_DIR"
+LOG_FILE="${LOGS_DIR}/build-preempt-rt-$(date +%Y%m%d-%H%M%S).log"
+
 echo ""
 echo -e "${BOLD}╔═══════════════════════════════════════════════════╗${NC}"
 echo -e "${BOLD}║       PREEMPT_RT Kernel Build & Install           ║${NC}"
@@ -70,19 +78,20 @@ echo -e "${BOLD}╚════════════════════�
 echo ""
 log_info "Install path : ${INSTALL_PATH}"
 log_info "Source dir    : ${SOURCE_DIR}"
+log_info "Log file      : ${LOG_FILE}"
 echo ""
 
 # ─── Step 1: Backup original kernel image ────────────────────────────────────
 
-log_step "1/6 — Backup original /boot/Image"
+log_step "1/6 — Backup original kernel image"
 if [[ -f /boot/Image.backup ]]; then
-    log_warn "/boot/Image.backup already exists, it will be overwritten."
+    log_warn "Image.backup already exists, it will be overwritten."
 fi
-log_info "This creates /boot/Image.backup so you can revert if needed."
+log_info "This creates Image.backup so you can revert if needed."
 
-confirm_step "Back up /boot/Image -> /boot/Image.backup?"
+confirm_step "Back up Image -> Image.backup?"
 sudo cp /boot/Image /boot/Image.backup
-log_success "Backup created: /boot/Image.backup"
+log_success "Backup created: Image.backup"
 
 # ─── Step 2: Enable RT configuration ─────────────────────────────────────────
 
@@ -95,9 +104,9 @@ log_info "Working directory: $(pwd)"
 ./generic_rt_build.sh "enable"
 log_success "RT configuration enabled."
 
-# ─── Step 3: Build kernel and in-tree modules ────────────────────────────────
+# ─── Step 3: Build kernel and modules ────────────────────────────────
 
-log_step "3/6 — Build kernel and in-tree modules"
+log_step "3/6 — Build kernel and modules"
 log_info "This removes any stale Image artifact and rebuilds the kernel."
 
 confirm_step "Build the kernel?"
@@ -109,53 +118,53 @@ if [[ -f "$IMAGE_PATH" ]]; then
     rm -rf "$IMAGE_PATH"
 fi
 
-log_info "Starting kernel build (make -C kernel) ..."
-make -C kernel
+log_info "Starting kernel build ..."
+make -C kernel -j"$JOBS" 2>&1 | tee -a "$LOG_FILE"
 log_success "Kernel build complete."
 
-# ─── Step 4: Install kernel and in-tree modules ──────────────────────────────
+# ─── Step 4: Install kernel and modules ──────────────────────────────
 
-log_step "4/6 — Install kernel and in-tree modules"
+log_step "4/6 — Install kernel and modules"
 log_info "This installs the built Image and modules to your system."
 
-confirm_step "Install kernel and in-tree modules (sudo)?"
+confirm_step "Install kernel and modules (sudo)?"
 cd "$SOURCE_DIR"
-sudo make install -C kernel
-log_success "Kernel and in-tree modules installed."
+sudo make install -C kernel 2>&1 | tee -a "$LOG_FILE"
+log_success "Kernel and modules installed."
 
-# ─── Step 5: Build out-of-tree modules ───────────────────────────────────────
+# ─── Step 5: Build OOT modules ───────────────────────────────────────
 
-log_step "5/6 — Build out-of-tree modules"
-log_info "Cleans previous build artifacts, then builds out-of-tree modules."
+log_step "5/6 — Build OOT modules"
+log_info "Cleans previous build artifacts, then builds OOT modules."
 
-confirm_step "Build out-of-tree modules (sudo)?"
+confirm_step "Build OOT modules (sudo)?"
 cd "$SOURCE_DIR"
 
 log_info "Cleaning previous build ..."
-sudo make clean
+sudo make clean 2>&1 | tee -a "$LOG_FILE"
 
 export KERNEL_HEADERS="${SOURCE_DIR}/kernel/kernel-jammy-src/"
 export IGNORE_CC_MISMATCH=1
 export IGNORE_PREEMPT_RT_PRESENCE=1
 
-log_info "Building out-of-tree modules ..."
-sudo -E make modules
-log_success "Out-of-tree modules built."
+log_info "Building OOT modules ..."
+sudo -E make modules -j"$JOBS" 2>&1 | tee -a "$LOG_FILE"
+log_success "OOT modules built."
 
-# ─── Step 6: Install out-of-tree modules ─────────────────────────────────────
+# ─── Step 6: Install OOT modules ─────────────────────────────────────
 
-log_step "6/6 — Install out-of-tree modules"
-log_info "Installs the out-of-tree modules into your system."
+log_step "6/6 — Install OOT modules"
+log_info "Installs the OOT modules into your system."
 
-confirm_step "Install out-of-tree modules (sudo)?"
+confirm_step "Install OOT modules (sudo)?"
 cd "$SOURCE_DIR"
 
 export KERNEL_HEADERS="${SOURCE_DIR}/kernel/kernel-jammy-src/"
 export IGNORE_CC_MISMATCH=1
 export IGNORE_PREEMPT_RT_PRESENCE=1
 
-sudo -E make modules_install
-log_success "Out-of-tree modules installed."
+sudo -E make modules_install 2>&1 | tee -a "$LOG_FILE"
+log_success "OOT modules installed."
 
 # ─── Done ─────────────────────────────────────────────────────────────────────
 
@@ -164,4 +173,5 @@ echo -e "${BOLD}${GREEN}╔═════════════════�
 echo -e "${BOLD}${GREEN}║           All steps completed!                    ║${NC}"
 echo -e "${BOLD}${GREEN}╚═══════════════════════════════════════════════════╝${NC}"
 echo ""
+log_info "Full build log saved to: ${LOG_FILE}"
 echo -e "${BOLD}${RED}Don't forget to add fallback entry in extlinux.conf!!!${NC}"
