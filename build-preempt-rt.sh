@@ -36,9 +36,9 @@ confirm_step() {
     echo -e "${BOLD}${YELLOW}─────────────────────────────────────────────────${NC}"
     echo -e "${BOLD}${YELLOW}  $msg${NC}"
     echo -e "${BOLD}${YELLOW}─────────────────────────────────────────────────${NC}"
-    read -rp "Proceed? [y/N] " answer
+    read -rp "Proceed? [Y/n] " answer
     case "$answer" in
-        [yY]|[yY][eE][sS]) return 0 ;;
+        [yY]|[yY][eE][sS]|"") return 0 ;;
         *)
             log_warn "Aborted by user."
             exit 0
