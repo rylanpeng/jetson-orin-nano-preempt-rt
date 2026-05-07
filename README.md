@@ -2,8 +2,7 @@
 
 Script to build and install PREEMPT_RT kernel for Jetson Orin Nano.
 
-Please take a look at the blog post xxx for how to use it.
-Or watch me demo on YouTube: xxx
+For the full walkthrough, see: [Enable PREEMPT_RT](https://rylanpeng.github.io/rylanpeng.dev/2-enable-preempt-rt/)
 
 ## Usage
 
